@@ -16,7 +16,7 @@
   /* --- text tints (white->grey, never pure #FFF) --- */
   --text-hi:#F4F5F7;       /* hero number, titles */
   --text-mid:#9DA1AB;      /* body, labels */
-  --text-lo:#5E626B;       /* captions, timestamps, disabled */
+  --text-lo:#7A808B;       /* captions, timestamps, disabled — raised to ~4.7:1 AA on --bg */
 
   /* --- the one accent (functional signal only, NEVER on money) --- */
   --accent:#B8E04A;        /* active control, bot-alive, primary fill, chart line */
@@ -44,7 +44,7 @@
   --t-body:15px;   --t-body-lh:1.4;   --t-body-ls:0;
   --t-caption:12px;--t-caption-lh:1.35;--t-caption-ls:0.02em;
   --t-mono:15px;   --t-mono-lh:1.3;   --t-mono-ls:0;        /* row values, uses tnum */
-  --t-micro:10px;  --t-micro-lh:1.2;  --t-micro-ls:0.08em;  /* ALLCAPS eyebrow labels */
+  --t-micro:11px;  --t-micro-lh:1.25; --t-micro-ls:0.07em;  /* ALLCAPS eyebrow labels */
 
   /* --- spacing scale (4px base; 4/8/12/16/24/32/48) --- */
   --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:24px; --s-6:32px; --s-8:48px;
@@ -274,7 +274,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;background:none;border:n
   box-shadow:0 -1px 0 0 var(--hairline); z-index:20;}
 .tabbar button{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:5px; color:var(--text-lo); transition:color var(--dur-fast) var(--ease);}
-.tabbar button .lbl{font-size:9px; letter-spacing:0.06em; text-transform:uppercase; font-weight:600;}
+.tabbar button .lbl{font-size:10px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600;}
 .tabbar button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;}
 .tabbar button.active{color:var(--accent);}
 
@@ -291,3 +291,55 @@ button{font-family:inherit;color:inherit;cursor:pointer;background:none;border:n
   text-transform:uppercase; display:block; margin-bottom:4px;}
 
 .empty{color:var(--text-lo); font-size:var(--t-caption); text-align:center; padding:var(--s-5);}
+
+/* ---------------- entrance motion (restrained; off for reduced-motion) ---------------- */
+.screen.active > *{animation:rise var(--dur-slow) var(--ease) both;}
+.screen.active > *:nth-child(2){animation-delay:35ms;}
+.screen.active > *:nth-child(3){animation-delay:70ms;}
+.screen.active > *:nth-child(4){animation-delay:105ms;}
+.screen.active > *:nth-child(5){animation-delay:140ms;}
+.screen.active > *:nth-child(n+6){animation-delay:170ms;}
+@keyframes rise{from{opacity:0; transform:translateY(9px);} to{opacity:1; transform:none;}}
+@media (prefers-reduced-motion:reduce){.screen.active > *{animation:none;}}
+
+/* ---------------- freshness / refresh affordance (under the hero) ---------------- */
+.refresh-line{display:inline-flex; align-items:center; gap:6px; margin-top:var(--s-3);
+  color:var(--text-lo); font-size:var(--t-caption); letter-spacing:0.01em; padding:5px 2px;}
+.refresh-line svg{width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round;}
+.refresh-line:active{color:var(--text-mid);}
+.refresh-line.spin svg{animation:spin 0.7s linear infinite; color:var(--accent);}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ---------------- "warming up" placeholder (live, but no trades yet) ---------------- */
+.warming{display:flex; flex-direction:column;}
+.warming .warm-msg{color:var(--text-mid); font-size:var(--t-body); line-height:1.5;
+  margin-top:var(--s-3); padding:0 var(--s-2);}
+.warming .warm-strong{color:var(--text-hi); font-weight:600;}
+.warm-spark{height:52px; margin:var(--s-4) var(--s-2) var(--s-1); border-radius:var(--r-chip);
+  background:linear-gradient(90deg, transparent 20%, var(--accent-wash) 50%, transparent 80%);
+  background-size:220% 100%; animation:sweep 2.6s var(--ease) infinite;}
+@keyframes sweep{0%{background-position:200% 0;} 100%{background-position:-120% 0;}}
+@media (prefers-reduced-motion:reduce){.warm-spark{animation:none;}}
+
+/* ---------------- first-run intro sheet ---------------- */
+.intro{position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end;
+  background:var(--scrim); opacity:0; transition:opacity var(--dur) var(--ease);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);}
+.intro.show{opacity:1;}
+.intro.out{opacity:0;}
+.intro-card{width:100%; max-width:480px; margin:0 auto; background:var(--surface-1);
+  border-radius:22px 22px 0 0; box-shadow:var(--elev-float);
+  padding:var(--s-6) var(--gutter) calc(var(--s-6) + env(safe-area-inset-bottom));
+  transform:translateY(14px); transition:transform var(--dur-slow) var(--ease);}
+.intro.show .intro-card{transform:none;}
+.intro-card h2{color:var(--text-hi); font-size:var(--t-title); font-weight:600;
+  letter-spacing:var(--t-title-ls); margin:var(--s-2) 0 var(--s-5); line-height:1.25;}
+.intro-card ul{list-style:none; margin:0 0 var(--s-5); padding:0;
+  display:flex; flex-direction:column; gap:var(--s-4);}
+.intro-card li{color:var(--text-mid); font-size:var(--t-body); line-height:1.5;
+  padding-left:var(--s-4); position:relative;}
+.intro-card li::before{content:""; position:absolute; left:0; top:8px; width:6px; height:6px;
+  border-radius:50%; background:var(--accent);}
+.intro-card li b{color:var(--text-hi); font-weight:600;}
+.intro-card .btn{width:100%;}

@@ -14,7 +14,9 @@
   'use strict';
 
   var CFG = window.CONFIG || {};
-  var SNAP = null; // loaded snapshot
+  var SNAP = null;        // loaded snapshot
+  var CURRENT = 'home';   // active screen (for in-place refresh)
+  var FIRST_PAINT = true; // count the hero up only once, on first load
 
   // ---------- formatting ----------
   function fmtMoney(n, opts) {
@@ -47,6 +49,40 @@
     if (h < 24) return h + 'h ago';
     return Math.round(h / 24) + 'd ago';
   }
+
+  function prefersReduced() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches);
+  }
+
+  // "live but nothing has happened yet": real DB, flat equity, no P&L, no positions.
+  // Distinct from isCold (empty DB) — here accounts exist but the bot hasn't traded.
+  function isFlat(snap) {
+    if (!snap || snap.isMock || snap.isCold) return false;
+    var p = portfolio(snap);
+    var eq = snap.equity || [];
+    var flatCurve = eq.length < 2 || eq.every(function (e) { return Math.abs(e.equity_marked - eq[0].equity_marked) < 0.005; });
+    var noPnl = Math.abs(p.total - p.start) < 0.005;
+    var noPos = !snap.holdings || snap.holdings.length === 0;
+    return flatCurve && noPnl && noPos;
+  }
+
+  // count a money figure up from 0 to its value once (easeOutCubic); respects reduced-motion.
+  function animateCount(el, to) {
+    if (!el) return;
+    if (prefersReduced()) { el.textContent = fmtMoney(to); return; }
+    var dur = 750, t0 = null;
+    el.textContent = fmtMoney(0);
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var k = Math.min(1, (ts - t0) / dur);
+      var e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmtMoney(to * e);
+      if (k < 1) requestAnimationFrame(step); else el.textContent = fmtMoney(to);
+    }
+    requestAnimationFrame(step);
+  }
+
+  var REFRESH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 5v6h-6"/></svg>';
 
   // ---------- portfolio math (honest, from snapshot) ----------
   // total/start come from accounts. Today's change is derived from the TOTAL
@@ -184,10 +220,13 @@
       sourceBar(snap) +
       '<div class="hero">' +
         '<div class="eyebrow">Total paper value · ' + (snap.accounts.length || 3) + ' accounts</div>' +
-        '<div class="value money">' + esc(fmtMoney(p.total)) + '</div>' +
-        (p.day == null
-          ? '<div class="today caption">Since start <span class="money ' + signClass(p.total - p.start) + '">' + fmtPct(p.sincePct) + '</span></div>'
-          : '<div class="today">Today <span class="money ' + signClass(p.day) + '">' + fmtMoney(p.day, { sign: true }) + ' · ' + fmtPct(p.todayPct) + '</span></div>') +
+        '<div class="value money" data-count>' + esc(fmtMoney(p.total)) + '</div>' +
+        (isFlat(snap)
+          ? '<div class="today caption">Watching ' + ((snap.coinHealth && snap.coinHealth.length) || 8) + ' coins · first trades pending</div>'
+          : p.day == null
+            ? '<div class="today caption">Since start <span class="money ' + signClass(p.total - p.start) + '">' + fmtPct(p.sincePct) + '</span></div>'
+            : '<div class="today">Today <span class="money ' + signClass(p.day) + '">' + fmtMoney(p.day, { sign: true }) + ' · ' + fmtPct(p.todayPct) + '</span></div>') +
+        '<button class="refresh-line" data-refresh aria-label="Refresh">' + REFRESH_SVG + '<span>Updated ' + esc(timeAgo((snap.status && snap.status.last_cycle) || snap.startedAt)) + '</span></button>' +
       '</div>' +
       '<div class="actions">' +
         '<button class="btn btn-primary" data-go="add">Add</button>' +
@@ -198,6 +237,7 @@
       '<div class="eyebrow section-label">Open positions</div>' +
       '<div class="rows">' + rows + '</div>' +
       '<p class="note">Paper trading — no real money is held or moved. Values reflect a backtested strategy running on live prices.</p>';
+    if (FIRST_PAINT) { animateCount(s.querySelector('[data-count]'), p.total); FIRST_PAINT = false; }
   }
 
   // ======================= SCREEN: PERFORMANCE =======================
@@ -238,19 +278,33 @@
       return '<button data-tf="' + t + '" class="' + (t === currentTF ? 'active' : '') + '">' + t + '</button>';
     }).join('');
 
+    var flat = isFlat(snap);
+    var pTot = portfolio(snap).total;
+    var chartBlock = flat
+      ? '<div class="chartwrap warming">' +
+          '<div class="chart-head">' +
+            '<div><div class="eyebrow">Marked equity</div>' +
+              '<div class="big money">' + esc(fmtMoney(pTot)) + '</div></div>' +
+            '<div style="text-align:right;"><div class="eyebrow">Change</div>' +
+              '<div class="money flat" style="font-size:var(--t-title);font-weight:600;">0.00%</div></div>' +
+          '</div>' +
+          '<div class="warm-msg">Your equity line appears after the <span class="warm-strong">first trade</span>. The bot is live and watching 8 coins — nothing has fired yet.</div>' +
+          '<div class="warm-spark"></div>' +
+        '</div>'
+      : '<div class="chartwrap">' +
+          '<div class="chart-head">' +
+            '<div><div class="eyebrow">' + esc(currentTF) + ' marked equity</div>' +
+              '<div class="big money">' + esc(fmtMoney(last)) + '</div></div>' +
+            '<div style="text-align:right;"><div class="eyebrow">Change</div>' +
+              '<div class="money ' + signClass(chg) + '" style="font-size:var(--t-title);font-weight:600;">' + fmtPct(chgPct) + '</div></div>' +
+          '</div>' +
+          equityChart(pts, 340, 150) +
+        '</div>';
     s.innerHTML = '' +
       '<div class="appbar"><div class="brand"><span class="dot"></span><h2>Performance</h2></div></div>' +
       sourceBar(snap) +
-      '<div class="segmented">' + seg + '</div>' +
-      '<div class="chartwrap">' +
-        '<div class="chart-head">' +
-          '<div><div class="eyebrow">' + esc(currentTF) + ' marked equity</div>' +
-            '<div class="big money">' + esc(fmtMoney(last)) + '</div></div>' +
-          '<div style="text-align:right;"><div class="eyebrow">Change</div>' +
-            '<div class="money ' + signClass(chg) + '" style="font-size:var(--t-title);font-weight:600;">' + fmtPct(chgPct) + '</div></div>' +
-        '</div>' +
-        equityChart(pts, 340, 150) +
-      '</div>' +
+      (flat ? '' : '<div class="segmented">' + seg + '</div>') +
+      chartBlock +
       '<div class="eyebrow section-label">Per-strategy</div>' +
       perStrat +
       '<p class="note">Marked equity includes open positions at last price. Past backtested results do not guarantee future returns.</p>';
@@ -372,7 +426,7 @@
         '<div class="coincell">' +
           '<div class="top"><span class="sym">' + esc(coinShort(c.coin)) + '</span>' +
             '<span class="pill ' + cls + '"><span class="d"></span>' + label + '</span></div>' +
-          '<div class="meta">' + c.trades + ' trades · exp R ' + (c.exp_r >= 0 ? '+' : '') + c.exp_r.toFixed(2) + '</div>' +
+          '<div class="meta">' + c.trades + ' trades · ' + (c.exp_r >= 0 ? '+' : '') + c.exp_r.toFixed(2) + 'R</div>' +
         '</div>';
     }).join('');
 
@@ -410,6 +464,7 @@
   var SCREENS = ['home', 'perf', 'add', 'withdraw', 'status'];
   var TAB_FOR = { home: 'home', perf: 'perf', add: 'home', withdraw: 'home', status: 'status' };
   function show(name) {
+    CURRENT = name;
     SCREENS.forEach(function (n) {
       var scr = document.getElementById('screen-' + n);
       if (scr) scr.classList.toggle('active', n === name);
@@ -433,11 +488,43 @@
       var b = e.target.closest('button'); if (!b) return;
       show(b.getAttribute('data-tab'));
     });
-    // delegate Add/Withdraw buttons from home hero
+    // delegate Add/Withdraw buttons + the refresh line from the home hero
     document.getElementById('app').addEventListener('click', function (e) {
-      var g = e.target.closest('[data-go]'); if (!g) return;
-      show(g.getAttribute('data-go'));
+      var g = e.target.closest('[data-go]'); if (g) { show(g.getAttribute('data-go')); return; }
+      var r = e.target.closest('[data-refresh]'); if (r) { refresh(r); }
     });
+  }
+
+  // re-fetch live data and re-render the current screen in place (no count-up replay).
+  function refresh(btn) {
+    if (btn) btn.classList.add('spin');
+    window.DATA.load().then(function (snap) { SNAP = snap; show(CURRENT); });
+  }
+
+  // one-time explainer sheet: what this is, that it is paper, why it sits flat.
+  function maybeIntro() {
+    try { if (localStorage.getItem('bleuspace_intro_seen')) return; } catch (e) { return; }
+    var ov = document.createElement('div');
+    ov.className = 'intro';
+    ov.innerHTML = '<div class="intro-card">' +
+      '<div class="eyebrow">Bleuspace · Paper Wallet</div>' +
+      '<h2>A calm view of your trading bot.</h2>' +
+      '<ul>' +
+        '<li><b>No real money.</b> Every number here is simulated — the app never holds or moves funds.</li>' +
+        '<li><b>The bot runs itself,</b> checking 8 coins every 4 hours. Most hours it stays flat — that is normal.</li>' +
+        '<li><b>Your balance moves only when it trades.</b> Add and Withdraw here are paper-only.</li>' +
+      '</ul>' +
+      '<button class="btn btn-primary" data-intro-ok>Got it</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov || e.target.closest('[data-intro-ok]')) {
+        try { localStorage.setItem('bleuspace_intro_seen', '1'); } catch (_e) {}
+        ov.classList.add('out');
+        setTimeout(function () { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 240);
+      }
+    });
+    requestAnimationFrame(function () { ov.classList.add('show'); });
   }
 
   // ======================= boot =======================
@@ -446,6 +533,11 @@
     window.DATA.load().then(function (snap) {
       SNAP = snap;
       show('home');
+      maybeIntro();
+    });
+    // refresh when the app is re-opened / brought back to the foreground
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && SNAP) refresh();
     });
   }
 
