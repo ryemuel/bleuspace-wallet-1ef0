@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>Bleuspace Paper Wallet</title>
+  <meta name="description" content="A calm, honest paper-trading wallet for the Bleuspace research bot. No real money moves." />
+
+  <!-- PWA / iOS home-screen -->
+  <meta name="theme-color" content="#0A0B0D" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Paper Wallet" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="screen-home" class="screen active"></section>
+    <section id="screen-perf" class="screen"></section>
+    <section id="screen-add" class="screen"></section>
+    <section id="screen-withdraw" class="screen"></section>
+    <section id="screen-status" class="screen"></section>
+  </div>
+
+  <nav class="tabbar" aria-label="Primary">
+    <button data-tab="home" class="active" aria-label="Wallet">
+      <svg viewBox="0 0 24 24"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H18a2 2 0 0 1 2 2v1H6a1 1 0 0 0 0 2h14v6a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 16.5V8.5Z"/><circle cx="16.5" cy="13" r="1.2" fill="currentColor" stroke="none"/></svg>
+      <span class="lbl">Wallet</span>
+    </button>
+    <button data-tab="perf" aria-label="Performance">
+      <svg viewBox="0 0 24 24"><path d="M4 16l4-5 4 3 4-7 4 6"/><path d="M3 20h18"/></svg>
+      <span class="lbl">Perf</span>
+    </button>
+    <button data-tab="add" aria-label="Add money">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+      <span class="lbl">Add</span>
+    </button>
+    <button data-tab="status" aria-label="Bot status">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/></svg>
+      <span class="lbl">Status</span>
+    </button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- config.local.js (gitignored) loads FIRST so the owner's real key wins.
+       It is optional; the app works without it via config.js defaults + mock. -->
+  <script src="./config.local.js" onerror="void 0"></script>
+  <script src="./config.js"></script>
+  <script src="./mock.js"></script>
+  <script src="./supa.js"></script>
+  <script src="./app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () { /* offline SW optional */ });
+      });
+    }
+  </script>
+</body>
+</html>
