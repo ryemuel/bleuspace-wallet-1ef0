@@ -343,3 +343,13 @@ button{font-family:inherit;color:inherit;cursor:pointer;background:none;border:n
   border-radius:50%; background:var(--accent);}
 .intro-card li b{color:var(--text-hi); font-weight:600;}
 .intro-card .btn{width:100%;}
+
+/* ---------------- markets: live prices + news ---------------- */
+[data-mktprice]{color:var(--text-hi);}
+.newsrow{text-decoration:none; color:inherit; align-items:flex-start;}
+.newsrow .main{padding-right:var(--s-2);}
+.newsrow .t{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.35;}
+.newsrow .val{padding-top:2px;}
+.newsrow .chev{width:18px; height:18px; stroke:var(--text-lo); fill:none;
+  stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+.newsrow:active{background:var(--surface-3);}

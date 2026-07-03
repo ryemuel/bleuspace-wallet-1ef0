@@ -19,11 +19,23 @@
   var FIRST_PAINT = true; // count the hero up only once, on first load
 
   // ---------- formatting ----------
+  // account money is in PHP (the paper pool). The strategy is %/R-based, so the
+  // unit is just a label — ₱ vs $ changes nothing in the math.
   function fmtMoney(n, opts) {
     opts = opts || {};
     var v = Number(n) || 0;
     var s = v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (opts.sign && v > 0 ? '+' : '') + '$' + s;
+    return (opts.sign && v > 0 ? '+' : '') + '₱' + s;
+  }
+  // bare number, no currency — for coin prices shown inside position rows.
+  function fmtNum(n) {
+    return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // USD coin price (crypto is quoted in USD worldwide) — variable dp for small coins.
+  function fmtUsd(n) {
+    var v = Number(n) || 0;
+    var dp = v >= 100 ? 2 : (v >= 1 ? 3 : 5);
+    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
   }
   function fmtPct(n, opts) {
     opts = opts || {};
@@ -187,7 +199,7 @@
       // the target price (honest, factual) instead.
       var right = (h.unreal_pct != null)
         ? '<div class="b money ' + signClass(h.unreal_pct) + '">' + fmtPct(h.unreal_pct) + '</div>'
-        : '<div class="b caption">target ' + esc(fmtMoney(h.target).replace('$', '')) + '</div>';
+        : '<div class="b caption">target ' + esc(fmtNum(h.target)) + '</div>';
       return '' +
         '<div class="row">' +
           '<div class="ic">' + esc(coinShort(h.coin)) + '</div>' +
@@ -196,7 +208,7 @@
             '<div class="s">' + esc(accLabel) + ' · ' + h.bars + ' bars · tier ' + esc(h.tier == null ? '—' : h.tier) + '</div>' +
           '</div>' +
           '<div class="val">' +
-            '<div class="a money">' + esc(fmtMoney(h.entry).replace('$', '')) + '</div>' +
+            '<div class="a money">' + esc(fmtNum(h.entry)) + '</div>' +
             right +
           '</div>' +
         '</div>';
@@ -330,9 +342,9 @@
     s.innerHTML = '' +
       '<div class="appbar"><div class="brand"><span class="dot"></span><h2>Add money</h2></div></div>' +
       '<div class="srcbar"><span class="badge paper"><span class="d"></span>PAPER — SIMULATION</span></div>' +
-      '<div class="amount-field"><span class="cur">$</span><input id="add-amt" inputmode="decimal" placeholder="0" /></div>' +
+      '<div class="amount-field"><span class="cur">₱</span><input id="add-amt" inputmode="decimal" placeholder="0" /></div>' +
       '<div class="chips">' +
-        ['100', '500', '1000', '5000'].map(function (v) { return '<button class="chip" data-add="' + v + '">$' + Number(v).toLocaleString() + '</button>'; }).join('') +
+        ['500', '1000', '5000', '10000'].map(function (v) { return '<button class="chip" data-add="' + v + '">₱' + Number(v).toLocaleString() + '</button>'; }).join('') +
       '</div>' +
       '<div class="eyebrow section-label">If it performs to the backtested estimate</div>' +
       '<div class="projection" id="add-proj"></div>' +
@@ -382,7 +394,7 @@
       '<div class="srcbar"><span class="badge paper"><span class="d"></span>PAPER — SIMULATION</span></div>' +
       '<div class="eyebrow section-label">Available (paper)</div>' +
       '<div class="hero" style="margin-top:var(--s-2);"><div class="value money">' + esc(fmtMoney(p.total)) + '</div></div>' +
-      '<div class="amount-field"><span class="cur">$</span><input id="wd-amt" inputmode="decimal" placeholder="0" /></div>' +
+      '<div class="amount-field"><span class="cur">₱</span><input id="wd-amt" inputmode="decimal" placeholder="0" /></div>' +
       '<div class="chips">' +
         '<button class="chip" data-wd="' + (p.total * 0.25).toFixed(2) + '">25%</button>' +
         '<button class="chip" data-wd="' + (p.total * 0.5).toFixed(2) + '">50%</button>' +
@@ -450,6 +462,67 @@
       '<p class="note">Health is live trade quality per coin. A coin is quarantined automatically when its live edge decays — that is the bot protecting capital, not a fault.</p>';
   }
 
+  // ======================= SCREEN: MARKETS =======================
+  var MKT_COINS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'LTCUSDT', 'ADAUSDT', 'DOGEUSDT'];
+  var COIN_NAMES = { BTCUSDT: 'Bitcoin', ETHUSDT: 'Ethereum', SOLUSDT: 'Solana', BNBUSDT: 'BNB', XRPUSDT: 'XRP', LTCUSDT: 'Litecoin', ADAUSDT: 'Cardano', DOGEUSDT: 'Dogecoin' };
+
+  // live prices straight from the non-geo-blocked Binance mirror (CORS-open).
+  function fetchPrices() {
+    var url = 'https://data-api.binance.vision/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(MKT_COINS));
+    return fetch(url).then(function (r) { return r.json(); }).then(function (arr) {
+      var by = {};
+      (arr || []).forEach(function (x) { by[x.symbol] = { price: Number(x.lastPrice), pct: Number(x.priceChangePercent) }; });
+      return by;
+    }).catch(function () { return null; });
+  }
+
+  function renderMarkets() {
+    var s = document.getElementById('screen-markets');
+    var priceRows = MKT_COINS.map(function (sym) {
+      var short = coinShort(sym);
+      return '<div class="row" data-mktrow="' + sym + '">' +
+        '<div class="ic">' + esc(short) + '</div>' +
+        '<div class="main"><div class="t">' + esc(short) + '</div><div class="s">' + esc(COIN_NAMES[sym] || short) + '</div></div>' +
+        '<div class="val"><div class="a money" data-mktprice>·····</div>' +
+          '<div class="b money flat" data-mktpct>—</div></div>' +
+        '</div>';
+    }).join('');
+    s.innerHTML = '' +
+      '<div class="appbar"><div class="brand"><span class="dot"></span><h2>Markets</h2></div></div>' +
+      '<div class="eyebrow section-label">Live prices · USD</div>' +
+      '<div class="rows">' + priceRows + '</div>' +
+      '<div class="eyebrow section-label">Latest crypto news</div>' +
+      '<div class="rows" id="mkt-news"><div class="empty">Loading headlines…</div></div>' +
+      '<p class="note">Prices are live market data in USD. News is context only — the bot trades a pure volume-breakout system and does not read the news.</p>';
+
+    fetchPrices().then(function (by) {
+      if (!by) return;
+      MKT_COINS.forEach(function (sym) {
+        var row = s.querySelector('[data-mktrow="' + sym + '"]'); if (!row) return;
+        var d = by[sym]; if (!d) return;
+        row.querySelector('[data-mktprice]').textContent = fmtUsd(d.price);
+        var pctEl = row.querySelector('[data-mktpct]');
+        pctEl.textContent = fmtPct(d.pct);
+        pctEl.className = 'b money ' + signClass(d.pct);
+      });
+    });
+
+    window.DATA.loadNews().then(function (items) {
+      var box = document.getElementById('mkt-news'); if (!box) return;
+      if (!items || !items.length) {
+        box.innerHTML = '<div class="empty">No headlines yet — the bot pulls fresh crypto news on its next cycle.</div>';
+        return;
+      }
+      box.innerHTML = items.map(function (n) {
+        return '<a class="row newsrow" href="' + esc(n.url) + '" target="_blank" rel="noopener noreferrer">' +
+          '<div class="main"><div class="t">' + esc(n.title) + '</div>' +
+            '<div class="s">' + esc(n.source || 'news') + ' · ' + esc(timeAgo(n.published_at)) + '</div></div>' +
+          '<div class="val"><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>' +
+          '</a>';
+      }).join('');
+    });
+  }
+
   // ======================= toast =======================
   var toastTimer = null;
   function toast(title, body) {
@@ -461,8 +534,8 @@
   }
 
   // ======================= nav =======================
-  var SCREENS = ['home', 'perf', 'add', 'withdraw', 'status'];
-  var TAB_FOR = { home: 'home', perf: 'perf', add: 'home', withdraw: 'home', status: 'status' };
+  var SCREENS = ['home', 'perf', 'markets', 'add', 'withdraw', 'status'];
+  var TAB_FOR = { home: 'home', perf: 'perf', markets: 'markets', add: 'home', withdraw: 'home', status: 'status' };
   function show(name) {
     CURRENT = name;
     SCREENS.forEach(function (n) {
@@ -472,6 +545,7 @@
     // render on show (fresh data binding)
     if (name === 'home') renderHome(SNAP);
     if (name === 'perf') renderPerformance(SNAP);
+    if (name === 'markets') renderMarkets();
     if (name === 'add') renderAdd();
     if (name === 'withdraw') renderWithdraw(SNAP);
     if (name === 'status') renderStatus(SNAP);

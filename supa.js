@@ -188,5 +188,18 @@ window.DATA = (function () {
     return list[0];
   }
 
-  return { load: load, configured: configured, recordWithdrawIntent: recordWithdrawIntent };
+  // Latest crypto headlines the bot mirrored into Supabase (news table).
+  // Read-only via anon; [] on missing key / no table / error (app shows empty state).
+  function loadNews() {
+    if (!configured) return Promise.resolve([]);
+    return rest('news?select=source,title,url,published_at&order=published_at.desc.nullslast&limit=15')
+      .then(function (rows) {
+        return (rows || []).map(function (r) {
+          return { source: r.source, title: r.title, url: r.url, published_at: r.published_at };
+        });
+      })
+      .catch(function () { return []; });
+  }
+
+  return { load: load, configured: configured, recordWithdrawIntent: recordWithdrawIntent, loadNews: loadNews };
 })();

@@ -1,7 +1,7 @@
 // Basic offline cache so the PWA installs and opens without network.
 // ponytail: cache-first for the app shell, network-first for Supabase REST
 // (never cache live data). Bump CACHE to invalidate.
-const CACHE = 'bleuspace-wallet-v2';
+const CACHE = 'bleuspace-wallet-v3';
 const SHELL = [
   './',
   './index.html',
